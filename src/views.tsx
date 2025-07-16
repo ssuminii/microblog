@@ -1,5 +1,10 @@
 import type { FC } from "hono/jsx";
 
+export interface ProfileProps {
+  name: string;
+  handle: string;
+}
+
 export const Layout: FC = (props) => (
   <html lang="en">
     <head>
@@ -37,4 +42,11 @@ export const SetupForm: FC = () => (
       <input type="submit" value="Setup" />
     </form>
   </>
+);
+
+export const Profile: FC<ProfileProps> = ({ name, handle }) => (
+  <hgroup>
+    <h1>{name}</h1>
+    <p style="user-select: all;">{handle}</p>
+  </hgroup>
 );
