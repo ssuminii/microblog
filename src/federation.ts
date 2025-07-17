@@ -17,4 +17,6 @@ federation.setActorDispatcher("/users/{identifier}", async (ctx, identifier) => 
   });
 });
 
+federation.setInboxListeners("/users/{identifier}/inbox", "/inbox");
+
 export default federation;
