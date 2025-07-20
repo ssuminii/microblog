@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { federation } from "@fedify/fedify/x/hono";
 import { getLogger } from "@logtape/logtape";
 import fedi from "./federation.ts";
-import { Layout, SetupForm, Profile, FollowerList } from './views.tsx';
+import { Layout, SetupForm, Profile, FollowerList, Home } from './views.tsx';
 import db from './db.ts';
 import type { User, Actor } from './schema.ts';
 
@@ -11,7 +11,25 @@ const logger = getLogger("microblog");
 const app = new Hono();
 app.use(federation(fedi, () => undefined))
 
-app.get("/", (c) => c.text("Hello, Fedify!"));
+app.get("/", (c) => {
+  const user = db
+    .prepare<unknown[], User & Actor>(
+      `
+      SELECT users.*, actors.*
+      FROM users
+      JOIN actors ON users.id = actors.user_id
+      LIMIT 1
+      `,
+    )
+    .get();
+  if (user == null) return c.redirect("/setup");
+
+  return c.html(
+    <Layout>
+      <Home user={user} />
+    </Layout>,
+  );
+});
 
 app.get("/setup", (c) => {
   // 계정이 이미 있는지 검사
