@@ -1,4 +1,4 @@
-import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk } from "@fedify/fedify";
+import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk, Accept, Follow, getActorHandle, Undo } from "@fedify/fedify";
 import { getLogger } from "@logtape/logtape";
 import { MemoryKvStore, InProcessMessageQueue } from "@fedify/fedify";
 import db from './db.ts';
@@ -89,6 +89,99 @@ federation.setActorDispatcher("/users/{identifier}", async (ctx, identifier) => 
   return pairs;
 });
 
-federation.setInboxListeners("/users/{identifier}/inbox", "/inbox");
+federation
+  .setInboxListeners("/users/{identifier}/inbox", "/inbox")
+  // on() - 특정한 종류의 액티비티가 수신되었을 때 취할 행동을 정의
+  // 팔로우 요청을 뜻하는 Follow 액티비티가 수신되었을 때 데이터베이스에 팔로워 정보 기록
+  // -> 팔로우 요청을 보낸 액터에게 수락을 뜻하는 Accept(Follow) 액티비티를 답장으로 보냄
+  .on(Follow, async (ctx, follow) => {
+    if (follow.objectId == null) {
+      logger.debug("The Follow object does not have an object: {follow}", {
+        follow,
+      });
+      return;
+    }
+    const object = ctx.parseUri(follow.objectId);
+    if (object == null || object.type !== "actor") {
+      logger.debug("The Follow object's object is not an actor: {follow}", {
+        follow,
+      });
+      return;
+    }
+    const follower = await follow.getActor();
+    if (follower?.id == null || follower.inboxId == null) {
+      logger.debug("The Follow object does not have an actor: {follow}", {
+        follow,
+      });
+      return;
+    }
+    const followingId = db
+      .prepare<unknown[], Actor>(
+        `
+        SELECT * FROM actors
+        JOIN users ON users.id = actors.user_id
+        WHERE users.username = ?
+        `,
+      )
+      .get(object.identifier)?.id;
+    if (followingId == null) {
+      logger.debug(
+        "Failed to find the actor to follow in the database: {object}",
+        { object },
+      );
+    }
+    const followerId = db
+      .prepare<unknown[], Actor>(
+        `
+        -- 팔로워 액터 레코드를 새로 추가하거나 이미 있으면 갱신
+        INSERT INTO actors (uri, handle, name, inbox_url, shared_inbox_url, url)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (uri) DO UPDATE SET
+          handle = excluded.handle,
+          name = excluded.name,
+          inbox_url = excluded.inbox_url,
+          shared_inbox_url = excluded.shared_inbox_url,
+          url = excluded.url
+        WHERE
+          actors.uri = excluded.uri
+        RETURNING *
+        `,
+      )
+      .get(
+        follower.id.href,
+        await getActorHandle(follower),
+        follower.name?.toString(),
+        follower.inboxId.href,
+        follower.endpoints?.sharedInbox?.href,
+        follower.url?.href,
+      )?.id;
+    db.prepare(
+      "INSERT INTO follows (following_id, follower_id) VALUES (?, ?)",
+    ).run(followingId, followerId);
+    const accept = new Accept({
+      actor: follow.objectId,
+      to: follow.actorId,
+      object: follow,
+    });
+    await ctx.sendActivity(object, follower, accept);
+  })
+  .on(Undo, async (ctx, undo) => {
+    const object = await undo.getObject();
+    if (!(object instanceof Follow)) return;
+    if (undo.actorId == null || object.objectId == null) return;
+    const parsed = ctx.parseUri(object.objectId);
+    if (parsed == null || parsed.type !== "actor") return;
+    db.prepare(
+      `
+      DELETE FROM follows
+      WHERE following_id = (
+        SELECT actors.id
+        FROM actors
+        JOIN users ON actors.user_id = users.id
+        WHERE users.username = ?
+      ) AND follower_id = (SELECT id FROM actors WHERE uri = ?)
+      `,
+    ).run(parsed.identifier, undo.actorId.href);
+  });
 
 export default federation;
