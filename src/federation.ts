@@ -1,4 +1,4 @@
-import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk, Accept, Follow, getActorHandle, Undo, type Recipient } from "@fedify/fedify";
+import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk, Accept, Follow, getActorHandle, Undo, Note, type Recipient } from "@fedify/fedify";
 import { getLogger } from "@logtape/logtape";
 import { MemoryKvStore, InProcessMessageQueue } from "@fedify/fedify";
 import db from './db.ts';
@@ -227,5 +227,13 @@ federation
       .get(identifier);
     return result == null ? 0 : result.cnt;
   });
+
+federation.setObjectDispatcher(
+  Note,
+  "/users/{identifier}/posts/{id}",
+  (ctx, values) => {
+    return null;
+  },
+);
 
 export default federation;
