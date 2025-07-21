@@ -26,6 +26,10 @@ export interface PostViewProps {
 
 export interface PostPageProps extends ProfileProps, PostViewProps {}
 
+export interface PostListProps {
+  posts: (Post & Actor)[];
+}
+
 export const Layout: FC = (props) => (
   <html lang="en">
     <head>
@@ -159,4 +163,14 @@ export const PostView: FC<PostViewProps> = ({ post }) => (
       </a>
     </footer>
   </article>
+);
+
+export const PostList: FC<PostListProps> = ({ posts }) => (
+  <>
+    {posts.map((post) => (
+      <div key={post.id}>
+        <PostView post={post} />
+      </div>
+    ))}
+  </>
 );
