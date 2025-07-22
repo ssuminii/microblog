@@ -1,4 +1,4 @@
-import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk, Accept, Follow, getActorHandle, Undo, Note, type Recipient, PUBLIC_COLLECTION, isActor, type Actor as APActor } from "@fedify/fedify";
+import { createFederation, Person, Endpoints, exportJwk, generateCryptoKeyPair, importJwk, Accept, Follow, getActorHandle, Undo, Note, type Recipient, PUBLIC_COLLECTION, isActor, type Actor as APActor, Create } from "@fedify/fedify";
 import { getLogger } from "@logtape/logtape";
 import { MemoryKvStore, InProcessMessageQueue } from "@fedify/fedify";
 import db from './db.ts';
@@ -186,6 +186,21 @@ federation
       )
       `,
     ).run(followingId, parsed.identifier);
+  })
+    .on(Create, async (ctx, create) => {
+    const object = await create.getObject();
+    if (!(object instanceof Note)) return;
+    const actor = create.actorId;
+    if (actor == null) return;
+    const author = await object.getAttribution();
+    if (!isActor(author) || author.id?.href !== actor.href) return;
+    const actorId = (await persistActor(author))?.id;
+    if (actorId == null) return;
+    if (object.id == null) return;
+    const content = object.content?.toString();
+    db.prepare(
+      "INSERT INTO posts (uri, actor_id, content, url) VALUES (?, ?, ?, ?)",
+    ).run(object.id.href, actorId, content, object.url?.href);
   });
 
 federation
