@@ -6,6 +6,7 @@ export interface ProfileProps {
   username: string;
   handle: string;
   followers: number;
+  following: number;
 }
 
 export interface FollowerListProps {
@@ -33,6 +34,8 @@ export interface PostListProps {
 export interface FollowingListProps {
   following: Actor[];
 }
+
+export interface PostPageProps extends ProfileProps, PostViewProps {}
 
 export const Layout: FC = (props) => (
   <html lang="en">
@@ -76,11 +79,13 @@ export const SetupForm: FC = () => (
   </>
 );
 
-export const Profile: FC<ProfileProps> = ({ name, handle, username, followers }) => (
+export const Profile: FC<ProfileProps> = ({ name, handle, username, followers, following }) => (
   <hgroup>
     <h1>{name}</h1>
     <p style="user-select: all;">        
       <span style="user-select: all;">{handle}</span> &middot;{" "}
+      <a href={`/users/${username}/following`}>{following} following</a>{" "}
+       &middot;{" "}
         <a href={`/users/${username}/followers`}>
           {followers === 1 ? "1 follower" : `${followers} followers`}
         </a>
@@ -159,6 +164,7 @@ export const PostPage: FC<PostPageProps> = (props) => (
       username={props.username}
       handle={props.handle}
       followers={props.followers}
+      following={props.following}
     />
     <PostView post={props.post} />
   </>

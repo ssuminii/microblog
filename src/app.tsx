@@ -113,6 +113,17 @@ app.get("/users/:username", async (c) => {
   if (user == null) return c.notFound();
 
   // biome-ignore lint/style/noNonNullAssertion: 언제나 하나의 레코드를 반환
+  const { following } = db
+    .prepare<unknown[], { following: number }>(
+      `
+      SELECT count(*) AS following
+      FROM follows
+      JOIN actors ON follows.follower_id = actors.id
+      WHERE actors.user_id = ?
+      `,
+    )
+    .get(user.id)!;
+
   const { followers } = db
     .prepare<unknown[], { followers: number }>(
       `
@@ -145,6 +156,7 @@ app.get("/users/:username", async (c) => {
         username={user.username}
         handle={handle} 
         followers={followers}
+        following={following}
       />
       <PostList posts={posts} />
     </Layout>,
@@ -244,16 +256,17 @@ app.get("/users/:username/posts/:id", (c) => {
     .get(c.req.param("username"), c.req.param("id"));
   if (post == null) return c.notFound();
 
-  // biome-ignore lint/style/noNonNullAssertion: 언제나 하나의 레코드를 반환
-  const { followers } = db
-    .prepare<unknown[], { followers: number }>(
+   // biome-ignore lint/style/noNonNullAssertion: 언제나 하나의 레코드를 반환
+  const { following, followers } = db
+    .prepare<unknown[], { following: number; followers: number }>(
       `
-      SELECT count(*) AS followers
+      SELECT sum(follows.follower_id = ?) AS following,
+             sum(follows.following_id = ?) AS followers
       FROM follows
-      WHERE follows.following_id = ?
       `,
     )
-    .get(post.actor_id)!;
+    .get(post.actor_id, post.actor_id)!;
+
   return c.html(
     <Layout>
       <PostPage
@@ -261,6 +274,7 @@ app.get("/users/:username/posts/:id", (c) => {
         username={post.username}
         handle={post.handle}
         followers={followers}
+        following={following}
         post={post}
       />
     </Layout>,
